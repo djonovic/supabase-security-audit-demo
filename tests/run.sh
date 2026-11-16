@@ -35,7 +35,9 @@ as_user() {
   local query="$*"
   psqlx -P pager=off <<SQL
 SET ROLE ${role};
+\\set QUIET on
 SELECT set_config('request.jwt.claim.sub', '${uid}', false);
+\\set QUIET off
 ${query}
 RESET ROLE;
 SQL
@@ -45,9 +47,11 @@ as_user_t() {
   local role="$1" uid="$2"
   shift 2
   local query="$*"
-  psqlx -A -t <<SQL
+  psqlx -A -t <<SQL | awk 'NF { v=$0 } END { printf "%s", v }'
 SET ROLE ${role};
+\\set QUIET on
 SELECT set_config('request.jwt.claim.sub', '${uid}', false);
+\\set QUIET off
 ${query}
 RESET ROLE;
 SQL
