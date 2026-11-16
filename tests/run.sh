@@ -33,11 +33,13 @@ as_user() {
   local role="$1" uid="$2"
   shift 2
   local query="$*"
-  psqlx -P pager=off <<SQL
+  # DO/PERFORM sets the JWT GUC without printing a result row.
+  # Filter command tags so CI logs stay readable.
+  psqlx -P pager=off <<SQL | grep -v -E '^(SET|RESET|DO)$'
 SET ROLE ${role};
-\\set QUIET on
-SELECT set_config('request.jwt.claim.sub', '${uid}', false);
-\\set QUIET off
+DO \$auth\$ BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '${uid}', false);
+END \$auth\$;
 ${query}
 RESET ROLE;
 SQL
@@ -47,11 +49,13 @@ as_user_t() {
   local role="$1" uid="$2"
   shift 2
   local query="$*"
-  psqlx -A -t <<SQL | awk 'NF { v=$0 } END { printf "%s", v }'
+  # Take the last integer-only line so set_config/RESET text cannot
+  # get concatenated into the count.
+  psqlx -A -t <<SQL | awk '/^[0-9]+$/ { v=$0 } END { printf "%s", v }'
 SET ROLE ${role};
-\\set QUIET on
-SELECT set_config('request.jwt.claim.sub', '${uid}', false);
-\\set QUIET off
+DO \$auth\$ BEGIN
+  PERFORM set_config('request.jwt.claim.sub', '${uid}', false);
+END \$auth\$;
 ${query}
 RESET ROLE;
 SQL
