@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sample security audit — Ledgerline (demo app) · Pasko Djonovic</title>
+<meta name="description" content="Sample audit of a demo app (fictional data). Four planted Supabase / Next.js holes, with fixes proven by real PostgreSQL Row Level Security tests in GitHub Actions.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+<meta property="og:title" content="Sample security audit — Ledgerline (demo app)">
+<meta property="og:description" content="The same query leaks another team's invoices with a common RLS mistake, and returns 0 rows with correct policies. Fictional data.">
+<meta property="og:image" content="cover-1280x769.png">
+</head>
+<body>
+<div class="banner">SAMPLE AUDIT OF A DEMO APP (FICTIONAL DATA) — Ledgerline, Apex Studio and Northwind Labs are not real. Nothing here is a production system.</div>
+
+<section id="cover">
+  <div class="cover-top">
+    <div class="brand">
+      <div class="logo">RLS</div>
+      <div>
+        <h1>Sample security audit — Ledgerline</h1>
+        <p class="sub">Intentionally vulnerable Next.js + Supabase invoices app. Four planted holes, fixes proven by real PostgreSQL Row Level Security — not mocks.</p>
+      </div>
+    </div>
+    <div class="meta">
+      <span>Auditor</span><b>Pasko Djonovic</b>
+      <span>Date</span><b>16 Nov 2026</b>
+      <span>Scope</span><b>Demo app, fictional data</b>
+      <span>Status</span><b>4 findings, all fixed in-sample</b>
+    </div>
+  </div>
+
+  <div class="chips">
+    <a class="chip" href="#f1"><span class="sev sev-crit">Critical</span> RLS disabled on invoice_notes</a>
+    <a class="chip" href="#f2"><span class="sev sev-crit">Critical</span> USING (true) on invoices</a>
+    <a class="chip" href="#f3"><span class="sev sev-crit">Critical</span> Service-role key in the browser</a>
+    <a class="chip" href="#f4"><span class="sev sev-high">High</span> API route with no auth check</a>
+  </div>
+
+  <div class="split">
+    <div class="panel before">
+      <div class="panel-h">
+        <span>Before the fix — Alice (Apex Studio) reads invoices</span>
+        <span class="badge-count">2 leaked rows</span>
+      </div>
+      <table class="rows">
+        <thead>
+          <tr><th>Invoice</th><th>Team</th><th>Client</th><th class="amt">Amount</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>INV-A-1001</td><td>Apex Studio</td><td>Acme Retail</td>
+            <td class="amt">$1,250.00</td><td></td>
+          </tr>
+          <tr>
+            <td>INV-A-1002</td><td>Apex Studio</td><td>Harbor Bakery</td>
+            <td class="amt">$480.00</td><td></td>
+          </tr>
+          <tr class="leak">
+            <td>INV-B-2001</td><td>Northwind Labs</td><td>Discreet Q4 retainer</td>
+            <td class="amt">$18,900.00</td><td><span class="tag">LEAKED</span></td>
+          </tr>
+          <tr class="leak">
+            <td>INV-B-2002</td><td>Northwind Labs</td><td>Stealth Launch Co.</td>
+            <td class="amt">$7,450.00</td><td><span class="tag">LEAKED</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel after">
+      <div class="panel-h">
+        <span>After the fix — Alice, same query, same role</span>
+        <span class="badge-count">0 leaked rows</span>
+      </div>
+      <table class="rows">
+        <thead>
+          <tr><th>Invoice</th><th>Team</th><th>Client</th><th class="amt">Amount</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>INV-A-1001</td><td>Apex Studio</td><td>Acme Retail</td>
+            <td class="amt">$1,250.00</td><td></td>
+          </tr>
+          <tr>
+            <td>INV-A-1002</td><td>Apex Studio</td><td>Harbor Bakery</td>
+            <td class="amt">$480.00</td><td></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="ok-empty">
+        <div class="big">0</div>
+        <span>Northwind Labs rows returned to Alice</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-foot">
+    <span class="ci"><span class="dot"></span> Proven in GitHub Actions against official Postgres 16 — the run must be green</span>
+    <span>Source: <a href="https://github.com/djonovic/supabase-security-audit-demo">djonovic/supabase-security-audit-demo</a></span>
+  </div>
+</section>
+
+<main class="report">
+  <h2>Executive summary</h2>
+  <p class="lead">Ledgerline is a fictional multi-team invoicing app. Alice Nguyen owns Apex Studio; Bob Okonkwo owns Northwind Labs. The vulnerable schema lets Alice read Bob’s confidential invoices and notes. The fixed schema does not. Tests set <code>auth.uid()</code> the same way Supabase does, then <code>SET ROLE authenticated</code> so Row Level Security actually applies (the database superuser would bypass it).</p>
+
+  <div class="statrow">
+    <div class="stat"><div class="k">Findings</div><div class="v">4</div></div>
+    <div class="stat"><div class="k">Leaked invoice rows, before</div><div class="v bad">2</div></div>
+    <div class="stat"><div class="k">Leaked invoice rows, after</div><div class="v good">0</div></div>
+    <div class="stat"><div class="k">Cost to host this demo</div><div class="v good">$0</div></div>
+  </div>
+
+  <!-- Finding 1 -->
+  <article class="finding" id="f1">
+    <div class="finding-h">
+      <span class="id">F-01</span>
+      <h3>Row Level Security is disabled on <code>invoice_notes</code></h3>
+      <span class="sev sev-crit">Critical</span>
+    </div>
+    <div class="grid-2">
+      <div class="block">
+        <h4>Impact</h4>
+        <p>Postgres leaves RLS off until you turn it on. A table with grants to <code>authenticated</code> or <code>anon</code> and no RLS is readable in full. Alice, a member of Apex Studio, can read Northwind Labs’ internal notes — including “target is evaluating a sale in Q1” and the code name ORCHID.</p>
+      </div>
+      <div class="block">
+        <h4>Repro</h4>
+        <pre class="code">-- as Alice, after 0002_vulnerable.sql
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', false);
+SELECT invoice_id, body FROM invoice_notes;
+-- 4 rows, 2 of them Bob's</pre>
+      </div>
+      <div class="block">
+        <h4>Fix (diff)</h4>
+        <pre class="diff"><span class="ctx">-- 0003_fixed.sql</span>
+<span class="add">+ ALTER TABLE public.invoice_notes ENABLE ROW LEVEL SECURITY;</span>
+<span class="add">+ ALTER TABLE public.invoice_notes FORCE ROW LEVEL SECURITY;</span>
+<span class="add">+ CREATE POLICY invoice_notes_same_team</span>
+<span class="add">+   ON public.invoice_notes FOR ALL TO authenticated</span>
+<span class="add">+   USING (team_id = (SELECT p.team_id</span>
+<span class="add">+                     FROM public.profiles p</span>
+<span class="add">+                     WHERE p.id = auth.uid()))</span>
+<span class="add">+   WITH CHECK (team_id = (SELECT p.team_id</span>
+<span class="add">+                          FROM public.profiles p</span>
+<span class="add">+                          WHERE p.id = auth.uid()));</span></pre>
+      </div>
+      <div class="block">
+        <h4>Test result</h4>
+        <div class="result-pills">
+          <span class="pill bad">BEFORE  Alice notes = 4, leaked = 2</span>
+          <span class="pill good">AFTER  Alice notes = 2, leaked = 0</span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Finding 2 -->
+  <article class="finding" id="f2">
+    <div class="finding-h">
+      <span class="id">F-02</span>
+      <h3><code>USING (true)</code> policy on <code>invoices</code> — RLS is “on” and still leaks</h3>
+      <span class="sev sev-crit">Critical</span>
+    </div>
+    <div class="grid-2">
+      <div class="block">
+        <h4>Impact</h4>
+        <p>RLS was enabled, which looks fine in the dashboard, but the policy allows every row for <code>anon</code> and <code>authenticated</code>. Alice sees INV-B-2001 ($18,900 “Q4 retainer for acquisition target”) and INV-B-2002 ($7,450 “stealth product launch”). “I turned RLS on” is not a fix if the policy is <code>true</code>.</p>
+      </div>
+      <div class="block">
+        <h4>Repro</h4>
+        <pre class="code">SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', false);
+SELECT invoice_number, client_name, memo
+FROM invoices;
+-- 4 rows, including both Northwind Labs invoices</pre>
+      </div>
+      <div class="block">
+        <h4>Fix (diff)</h4>
+        <pre class="diff"><span class="del">- CREATE POLICY invoices_all_access ON public.invoices</span>
+<span class="del">-   FOR ALL TO anon, authenticated</span>
+<span class="del">-   USING (true)</span>
+<span class="del">-   WITH CHECK (true);</span>
+<span class="add">+ DROP POLICY invoices_all_access ON public.invoices;</span>
+<span class="add">+ ALTER TABLE public.invoices FORCE ROW LEVEL SECURITY;</span>
+<span class="add">+ CREATE POLICY invoices_same_team ON public.invoices</span>
+<span class="add">+   FOR ALL TO authenticated</span>
+<span class="add">+   USING (team_id = (SELECT p.team_id FROM profiles p</span>
+<span class="add">+                     WHERE p.id = auth.uid()))</span>
+<span class="add">+   WITH CHECK (team_id = (SELECT p.team_id FROM profiles p</span>
+<span class="add">+                          WHERE p.id = auth.uid()));</span></pre>
+      </div>
+      <div class="block">
+        <h4>Test result</h4>
+        <div class="result-pills">
+          <span class="pill bad">BEFORE  Alice invoices = 4, leaked = 2</span>
+          <span class="pill good">AFTER  Alice invoices = 2, leaked = 0</span>
+          <span class="pill good">AFTER  Bob invoices = 2, leaked = 0</span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Finding 3 -->
+  <article class="finding" id="f3">
+    <div class="finding-h">
+      <span class="id">F-03</span>
+      <h3>Service-role key used in client-side code</h3>
+      <span class="sev sev-crit">Critical</span>
+    </div>
+    <div class="grid-2">
+      <div class="block">
+        <h4>Impact</h4>
+        <p>The <code>service_role</code> key is a secret. It maps to a database role with <code>BYPASSRLS</code>. A key shipped in a client bundle, a <code>NEXT_PUBLIC_*</code> variable, or a public repo lets anyone skip every policy — even after F-01 and F-02 are fixed. This demo uses <strong>fake keys only</strong>; the JWT payload says <code>FAKE DEMO KEY - NOT REAL</code>.</p>
+      </div>
+      <div class="block">
+        <h4>Repro</h4>
+        <pre class="code">// src/vulnerable/app/lib/supabase-browser.ts
+'use client';
+export const supabase = createClient(url, SERVICE_ROLE_KEY);
+
+-- After the SQL fix, as that role:
+SET ROLE service_role;
+SELECT count(*) FROM invoices;  -- still 4</pre>
+      </div>
+      <div class="block">
+        <h4>Fix (diff)</h4>
+        <pre class="diff"><span class="ctx">// src/fixed/app/lib/supabase-browser.ts</span>
+<span class="del">- export const supabase = createClient(url, SERVICE_ROLE_KEY);</span>
+<span class="add">+ export const supabase = createClient(url, ANON_KEY);</span>
+<span class="ctx">// service role stays in supabase-server.ts, never NEXT_PUBLIC_</span></pre>
+      </div>
+      <div class="block">
+        <h4>Test result</h4>
+        <div class="result-pills">
+          <span class="pill bad">service_role after SQL fix: still 4 invoices</span>
+          <span class="pill good">authenticated Alice after SQL fix: 0 leaked</span>
+          <span class="pill neutral">Keys in this repo are fake placeholders</span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- Finding 4 -->
+  <article class="finding" id="f4">
+    <div class="finding-h">
+      <span class="id">F-04</span>
+      <h3>Missing auth check in the invoices API route</h3>
+      <span class="sev sev-high">High</span>
+    </div>
+    <div class="grid-2">
+      <div class="block">
+        <h4>Impact</h4>
+        <p><code>GET /api/invoices?teamId=&lt;victim&gt;</code> never looks at the session. It trusts the query string and reads through the service-role client, so RLS cannot save it. An unauthenticated caller can pull Northwind Labs’ two invoices. This stays broken even if the key is moved server-side, which is why it is a separate finding.</p>
+      </div>
+      <div class="block">
+        <h4>Repro</h4>
+        <pre class="code">// src/vulnerable/app/api/invoices/route.ts
+export async function GET(req) {
+  const teamId = req.nextUrl.searchParams.get('teamId');
+  // no getUser(), no membership check
+  const { data } = await serviceRole
+    .from('invoices').select('*').eq('team_id', teamId);
+  return NextResponse.json({ invoices: data });
+}</pre>
+      </div>
+      <div class="block">
+        <h4>Fix (diff)</h4>
+        <pre class="diff"><span class="add">+ const { data: { user } } = await userClient.auth.getUser();</span>
+<span class="add">+ if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });</span>
+<span class="add">+ const { data: profile } = await userClient.from('profiles')</span>
+<span class="add">+   .select('team_id').eq('id', user.id).single();</span>
+<span class="add">+ if (requestedTeamId &amp;&amp; requestedTeamId !== profile.team_id)</span>
+<span class="add">+   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });</span>
+<span class="del">- .eq('team_id', teamId)          // client-supplied</span>
+<span class="add">+ .eq('team_id', profile.team_id) // from the session</span>
+<span class="ctx">// query with the user's JWT + anon key, not service_role</span></pre>
+      </div>
+      <div class="block">
+        <h4>Test result</h4>
+        <div class="result-pills">
+          <span class="pill bad">VULNERABLE API, no session, team B: 2 rows</span>
+          <span class="pill good">FIXED API, no session: 401</span>
+          <span class="pill good">FIXED API, Alice asks team B: 403</span>
+          <span class="pill good">FIXED API, Alice own team: 2 rows</span>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <h2>Common Supabase RLS holes</h2>
+  <p class="lead">A short checklist used in a real audit. The four planted findings above are the ones proven in this sample. The rest are equally common in production apps.</p>
+  <ul class="checklist">
+    <li><b>1. RLS never enabled</b><span>New tables default to off. A grant to <code>anon</code> or <code>authenticated</code> then exposes every row.</span></li>
+    <li><b>2. <code>USING (true)</code> left from prototyping</b><span>RLS is “on” in the dashboard, but the policy is a no-op. Same leak as F-02.</span></li>
+    <li><b>3. Service-role key in the client</b><span>Any <code>NEXT_PUBLIC_*</code> or browser bundle with that key bypasses every policy.</span></li>
+    <li><b>4. API routes that skip <code>getUser()</code></b><span>A server client with the service role and a client-supplied id is a direct object reference.</span></li>
+    <li><b>5. Missing <code>FORCE ROW LEVEL SECURITY</code></b><span>Table owners bypass RLS. Fine in hosted Supabase, surprising in local / CI / migrations run as the owner.</span></li>
+    <li><b>6. <code>USING</code> without <code>WITH CHECK</code></b><span>Reads look correct; <code>INSERT</code>/<code>UPDATE</code> can still write into another team.</span></li>
+    <li><b>7. Client-side filters trusted as security</b><span><code>.eq('team_id', myTeam)</code> in the app is not a policy. Change the request, change the data.</span></li>
+    <li><b>8. <code>SECURITY DEFINER</code> functions</b><span>A helper that runs as the owner can quietly bypass RLS unless it re-checks <code>auth.uid()</code>.</span></li>
+    <li><b>9. Views without <code>security_invoker</code></b><span>On Postgres 15+, a view may run as its owner and skip the caller’s policies.</span></li>
+    <li><b>10. Storage buckets and Realtime</b><span>File objects and subscriptions need their own policies. Table RLS does not cover them automatically.</span></li>
+  </ul>
+
+  <h2>How the proof is run</h2>
+  <div class="howto">
+    <p>No hosted Supabase project is used. <code>auth.uid()</code> is emulated the same way Supabase does, by reading the JWT <code>sub</code> from a session GUC. Tests then <code>SET ROLE authenticated</code> (no <code>BYPASSRLS</code>) or <code>SET ROLE service_role</code> (has <code>BYPASSRLS</code>). That is real SQL RLS, not a mock.</p>
+    <ol>
+      <li>GitHub Actions starts official <code>postgres:16</code>.</li>
+      <li><code>tests/run.sh</code> applies <code>0001_schema.sql</code>, <code>seed.sql</code>, and the vulnerable policies.</li>
+      <li>It asserts Alice leaks 2 invoices and 2 notes, and that an unauthenticated API call for team B returns 2 rows.</li>
+      <li>It applies <code>0003_fixed.sql</code> and asserts <strong>0 leaked rows</strong> for Alice and for Bob, a 401 / 403 on the fixed API, and that <code>service_role</code> still sees all 4 invoices (the reason finding 3 exists).</li>
+    </ol>
+    <p style="margin:12px 0 0">Run it locally with <code>DATABASE_URL=postgres://… bash tests/run.sh</code>. The workflow file is <code>.github/workflows/ci.yml</code>.</p>
+  </div>
+</main>
+
+<footer>
+  <p><strong>Sample audit of a demo app (fictional data).</strong> Ledgerline, Apex Studio, Northwind Labs, Alice Nguyen and Bob Okonkwo are invented. The keys in <code>src/**/lib/keys.ts</code> are inert placeholders.</p>
+  <p class="by">Built by <b>Pasko Djonovic</b> — full-stack React / Next.js and Supabase developer ·
+    <a href="https://www.upwork.com/freelancers/paskodjonovic">Upwork</a> ·
+    <a href="https://github.com/djonovic/supabase-security-audit-demo">Source</a>
+  </p>
+</footer>
+</body>
+</html>

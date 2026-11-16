@@ -1,0 +1,42 @@
+name: audit-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rls:
+    name: Postgres RLS before / after
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ledgerline
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ledgerline"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Run vulnerable-then-fixed tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/ledgerline
+          PGSSLMODE: disable
+        run: bash tests/run.sh
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rls-results
+          path: tests/results.json
+          if-no-files-found: ignore
