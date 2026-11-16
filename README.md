@@ -1,12 +1,12 @@
 # Supabase security audit — sample report (demo app, fictional data)
 
 [![audit-tests](https://github.com/djonovic/supabase-security-audit-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/djonovic/supabase-security-audit-demo/actions/workflows/ci.yml)
-**Live report:** https://djonovic.github.io/supabase-security-audit-demo/
+**Live report:** https://djonovic.github.io/supabase-security-audit-demo/ · **Need this on your app?** [Hire me on Upwork](https://www.upwork.com/freelancers/paskodjonovic)
 
 > **In 10 seconds:** a common Supabase Row Level Security mistake lets a
 > logged-in user read **another team's invoices**. This repo plants that
 > hole (and three others), fixes them, and proves the fix with real
-> PostgreSQL RLS tests that run in GitHub Actions on every push.
+> PostgreSQL 16 RLS tests that run in GitHub Actions on every push.
 
 ![Walkthrough: before the fix Alice sees 2 of Bob's invoices, after the fix 0](screenshots/audit-walkthrough.gif)
 
@@ -44,7 +44,7 @@ Screenshots of every finding: `screenshots/finding-01.png` … `finding-04.png`.
 ## Details
 
 This repo plants four common Supabase / Next.js holes, then proves the
-fixes with real PostgreSQL Row Level Security (not mocks):
+fixes. The RLS fixes are proven on real PostgreSQL 16 in CI; the service-role key fix is a code change, and the API-route fix is checked by a simulated route in the same script:
 
 1. **RLS disabled** on `invoice_notes` (Postgres default is off).
 2. A **`USING (true)`** policy on `invoices` that lets team A read team B's rows.

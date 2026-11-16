@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sample security audit — Ledgerline (demo app) · Pasko Djonovic</title>
-<meta name="description" content="Sample audit of a demo app (fictional data). Four planted Supabase / Next.js holes, with fixes proven by real PostgreSQL Row Level Security tests in GitHub Actions.">
+<meta name="description" content="Sample audit of a demo app (fictional data). Four planted Supabase / Next.js holes, with RLS fixes proven on real PostgreSQL 16 tests in GitHub Actions.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,14 +23,18 @@
       <div class="logo">RLS</div>
       <div>
         <h1>Sample security audit — Ledgerline</h1>
-        <p class="sub">Intentionally vulnerable Next.js + Supabase invoices app. Four planted holes, fixes proven by real PostgreSQL Row Level Security — not mocks.</p>
+        <p class="sub">Intentionally vulnerable Next.js + Supabase invoices app. Four planted holes; RLS fixes proven on real PostgreSQL 16 in CI.</p>
+        <p class="hireline">I run this same audit on your Supabase project: findings + fixed policies + a test that proves 0 leaks.</p>
       </div>
     </div>
+    <div class="meta-wrap">
+    <a class="hirebtn" href="https://www.upwork.com/freelancers/paskodjonovic" target="_blank" rel="noopener">Hire me on Upwork →</a>
     <div class="meta">
       <span>Auditor</span><b>Pasko Djonovic</b>
       <span>Date</span><b>16 Nov 2026</b>
       <span>Scope</span><b>Demo app, fictional data</b>
       <span>Status</span><b>4 findings, all fixed in-sample</b>
+    </div>
     </div>
   </div>
 
@@ -47,7 +51,7 @@
         <span>Before the fix — Alice (Apex Studio) reads invoices</span>
         <span class="badge-count">2 leaked rows</span>
       </div>
-      <table class="rows">
+      <div class="tscroll"><table class="rows">
         <thead>
           <tr><th>Invoice</th><th>Team</th><th>Client</th><th class="amt">Amount</th><th></th></tr>
         </thead>
@@ -69,14 +73,14 @@
             <td class="amt">$7,450.00</td><td><span class="tag">LEAKED</span></td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
     </div>
     <div class="panel after">
       <div class="panel-h">
         <span>After the fix — Alice, same query, same role</span>
         <span class="badge-count">0 leaked rows</span>
       </div>
-      <table class="rows">
+      <div class="tscroll"><table class="rows">
         <thead>
           <tr><th>Invoice</th><th>Team</th><th>Client</th><th class="amt">Amount</th><th></th></tr>
         </thead>
@@ -90,7 +94,7 @@
             <td class="amt">$480.00</td><td></td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
       <div class="ok-empty">
         <div class="big">0</div>
         <span>Northwind Labs rows returned to Alice</span>
