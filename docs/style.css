@@ -146,7 +146,7 @@ table.rows {
   width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
-  flex: 1;
+  flex: none;
 }
 table.rows th {
   text-align: left;
@@ -277,9 +277,9 @@ pre.diff, pre.out, pre.code {
   white-space: pre;
   color: #d5deea;
 }
-.del { color: #fda4af; display: block; }
-.add { color: #6ee7b7; display: block; }
-.ctx { color: #8b9bb3; display: block; }
+.del { display: inline; color: #fda4af; }
+.add { display: inline; color: #6ee7b7;}
+.ctx { display: inline; color: #8b9bb3;}
 .result-pills { display: flex; flex-wrap: wrap; gap: 8px; }
 .pill {
   font: 600 12px var(--mono);

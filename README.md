@@ -1,10 +1,47 @@
-# Sample security audit — Ledgerline (demo app)
+# Supabase security audit — sample report (demo app, fictional data)
 
-**Sample audit of a demo app (fictional data).** Ledgerline is a made-up
-multi-team invoicing app. Apex Studio (Alice) and Northwind Labs (Bob)
-are not real companies. Nothing here is a production system.
+[![audit-tests](https://github.com/djonovic/supabase-security-audit-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/djonovic/supabase-security-audit-demo/actions/workflows/ci.yml)
+**Live report:** https://djonovic.github.io/supabase-security-audit-demo/
 
-Live report: https://djonovic.github.io/supabase-security-audit-demo/
+> **In 10 seconds:** a common Supabase Row Level Security mistake lets a
+> logged-in user read **another team's invoices**. This repo plants that
+> hole (and three others), fixes them, and proves the fix with real
+> PostgreSQL RLS tests that run in GitHub Actions on every push.
+
+![Walkthrough: before the fix Alice sees 2 of Bob's invoices, after the fix 0](screenshots/audit-walkthrough.gif)
+
+## The problem
+
+Supabase exposes your Postgres tables straight to the browser through the
+anon / authenticated keys. The only thing standing between one user and
+everyone else's data is **Row Level Security**. Typical holes in apps built
+fast (including Lovable / Bolt / Cursor-generated apps):
+
+- RLS never enabled on a table (Postgres default is *off*).
+- A policy like `USING (true)` — RLS shows "enabled" in the dashboard, but every row is readable.
+- The `service_role` key shipped to client-side code, which bypasses RLS entirely.
+- An API route that trusts a `teamId` from the request instead of the session.
+
+## Before / after
+
+| Before the fix — Alice (Apex Studio) queries `invoices` | After the fix — same query, same role |
+| --- | --- |
+| ![Before: 2 leaked rows](screenshots/before-leak.png) | ![After: 0 leaked rows](screenshots/after-fixed.png) |
+
+## Findings and fixes
+
+| ID | Severity | Finding | Fix | Proof (tests/run.sh) |
+| --- | --- | --- | --- | --- |
+| F-01 | Critical | RLS disabled on `invoice_notes` | `ENABLE` + `FORCE ROW LEVEL SECURITY`, team-scoped policy | leaked notes 2 → 0 |
+| F-02 | Critical | `USING (true)` policy on `invoices` | team-scoped `USING` / `WITH CHECK` via `auth.uid()` | leaked invoices 2 → 0 |
+| F-03 | Critical | Service-role key used in browser code | key moved server-only; browser uses anon key + RLS | service role still sees all rows → must stay server-side |
+| F-04 | High | API route with no auth check, trusts `teamId` | session required, team derived from profile | 401 no session · 403 other team · 2 own rows |
+
+Each finding on the [live report](https://djonovic.github.io/supabase-security-audit-demo/)
+has the impact, a SQL repro, the fix as a diff, and the test result.
+Screenshots of every finding: `screenshots/finding-01.png` … `finding-04.png`.
+
+## Details
 
 This repo plants four common Supabase / Next.js holes, then proves the
 fixes with real PostgreSQL Row Level Security (not mocks):
